@@ -2,7 +2,7 @@
 
 A simple decentralized stablecoin project built with Foundry.
 
-This project demonstrates a basic stablecoin system with:
+This project demonstrates a stablecoin system with:
 - an ERC20 stablecoin token
 - collateral-backed minting logic
 - a DSCEngine contract managing deposits and price feeds
@@ -41,4 +41,4 @@ forge test
 ```
 
 ## Notes
-This is a learning project focused on stablecoin mechanics, collateralization, and minting logic. It is intentionally simple and meant to be expanded as you build more advanced DeFi features.
+This is a project focused on stablecoin mechanics, collateralization, and minting logic. It is intentionally simple and meant to be expanded as you build more advanced DeFi features.
