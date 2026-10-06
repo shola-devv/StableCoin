@@ -42,3 +42,9 @@ forge test
 
 ## Notes
 This is a project focused on stablecoin mechanics, collateralization, and minting logic. It is intentionally simple and meant to be expanded as you build more advanced DeFi features.
+
+
+todo
+GET THE WETH and WBTC address from the foundry repo
+fill out the mock file from the oline repo
+import erc20 mock form openzeppelin properly

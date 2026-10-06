@@ -26,6 +26,8 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeTheSameLength();
     error DSCEngine__TokenNotAllowed();
     error DSCEngine__TransferFailed();
+    error DSCEngine_breaksHealthFactor(uint256 healthFactor);
+    error DSCEngine_mintFailed();
 
     ////////////////////////////
     //////// State variables///////////
@@ -38,7 +40,8 @@ contract DSCEngine is ReentrancyGuard {
     mapping(address user => uint256 amountDscMinted) private s_DSCMinted;
     address[] private s_collateralTokens;
     uint256 private constant LIQUIDATION_TRESHOLD = 50;
-     uint256 private constant LQUIDATION_PRECISION = 100;
+    uint256 private constant LQUIDATION_PRECISION = 100;
+    uint256 private constant MIN_HEALTH_FACTOR = 1;
 
     ////////////////////////////
     //////// Events ///////////
@@ -70,6 +73,8 @@ contract DSCEngine is ReentrancyGuard {
         if (tokenAddresses.length != priceFeedAddresses.length) {
             revert DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeTheSameLength();
         }
+
+        i_dsc = DecentralisedStableCoin(dscAddress);
 
         for (uint256 i = 0; i < tokenAddresses.length; i++) {
             s_priceFeeds[tokenAddresses[i]] = priceFeedAddresses[i];
@@ -105,13 +110,20 @@ contract DSCEngine is ReentrancyGuard {
     function mintDSC(uint256 amountDscToMint) external moreThanZero(amountDscToMint) nonReentrant {
         s_DSCMinted[msg.sender] += amountDscToMint;
         _revertIfHealthFactorIsBroken(msg.sender);
+
+        bool minted = i_dsc.mint(msg.sender, amountDscToMint);
+        if (!minted) {
+            revert DSCEngine_mintFailed();
+        }
     }
 
     function burnDSC() external {}
 
     function liquidate() external {}
 
-    function getHealthFactor() external view returns (uint256) {}
+    function getHealthFactor() external view returns (uint256) {
+        return _healthFactor(msg.sender);
+    }
 
     /////////////////////////////////////////
     //private and internal view functions////
@@ -131,34 +143,38 @@ contract DSCEngine is ReentrancyGuard {
     /* if  user gets to 0 they can get liquidated
     */
 
-    function _healthFactor(address user) private returns (uint256) {
+    function _healthFactor(address user) private view returns (uint256) {
         (uint256 totalDscMinted, uint256 collateralValueInUsd) = _getAccountInformation(user);
-        uint256 collateralAdjustedForTreshold = (collateralValueInUsd * LIQUIDATION_TRESHOLD)/ LQUIDATION_PRECISION;
+        if (totalDscMinted == 0) {
+            return type(uint256).max;
+        }
+        uint256 collateralAdjustedForTreshold = (collateralValueInUsd * LIQUIDATION_TRESHOLD) / LQUIDATION_PRECISION;
         return (collateralAdjustedForTreshold * PRECISION) / totalDscMinted;
     }
 
-
-// check healtfactor if they do have enoughcollateral
+    // check healtfactor if they do have enoughcollateral
     function _revertIfHealthFactorIsBroken(address user) internal view {
-               uint256 userHealthFactor = _healthFactor(user);
-             if(userHealthFactor < minHealthFactor)
-  
+        uint256 userHealthFactor = _healthFactor(user);
+        if (userHealthFactor < MIN_HEALTH_FACTOR) {
+            revert DSCEngine_breaksHealthFactor(userHealthFactor);
+        }
     }
 
     ////////////////////////////
     //pubblic and external functions///////
     ////////////////////////
     function _getAccountCollateralValue(address user) public view returns (uint256) {
+        uint256 totalCollateralValueInUsd;
         for (uint256 i = 0; i < s_collateralTokens.length; i++) {
             address token = s_collateralTokens[i];
             uint256 amount = s_collateralDeposited[user][token];
-            totalCollatralValueInUsd = getUsdValue(token, amount);
+            totalCollateralValueInUsd += getUsdValue(token, amount);
         }
         return totalCollateralValueInUsd;
     }
 
     function getUsdValue(address token, uint256 amount) public view returns (uint256) {
-        Aggregatorv3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
         (, int256 price,,,) = priceFeed.latestRoundData();
         return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
     }
