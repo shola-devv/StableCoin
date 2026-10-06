@@ -41,6 +41,6 @@ forge test
 ```
 
 ## Notes
-This is a project focused on stablecoin mechanics, collateralization, and minting logic. It is intentionally simple and meant to be expanded as you build more advanced DeFi features.
+This is a project focused on stablecoin mechanics, collateralization, and minting logic. It is intentionally simple and meant to be expanded as more advanced DeFi features are added .
 
 
