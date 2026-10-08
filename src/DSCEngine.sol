@@ -28,7 +28,7 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__TransferFailed();
     error DSCEngine_breaksHealthFactor(uint256 healthFactor);
     error DSCEngine_mintFailed();
-     error DSCEngine__healthFactorOkay();
+    error DSCEngine__healthFactorOkay();
     ////////////////////////////
     //////// State variables///////////
     ///////////////////////////
@@ -47,7 +47,7 @@ contract DSCEngine is ReentrancyGuard {
     //////// Events ///////////
     ///////////////////////////
     event collateralDeposited(address indexed user, address indexed token, uint256 indexed amount);
-    event collateralRedeemed(address indexed user, , uint256 indexed amount, address indexed token );
+    event collateralRedeemed(address indexed user, uint256 indexed amount, address indexed token);
 
     ////////////////////////////
     ////////Modifier ///////////
@@ -98,40 +98,41 @@ contract DSCEngine is ReentrancyGuard {
         }
     }
 
-    function redeemCollateral(address tokenCollateralAddress, uint amountCollateral) public moreThanZero(amountCollateral) nonReentrant()
-     {
-    s_collateraldeposited[msg.sender][tokenCollateralAddress] -= amountCollateral;
-    emit collateralRedeemed(msg.sender, tokenCollateralAddress, amountCollateral);
-   bool success = IERC20(tokenCollateralAddress).transfer(msg.sender, amountCollateral);
-   if(!success){
-    DSCEngine__TransferFailed();
-   }
-   _revertIfHealthFactorIsBroken(msg.sender);
-
-    }
-
-
-/*
-*@param tokenCollateralAddress The collateral address to redeem
-* @param amountColateral The amount of collateral to redeem
-*@param amountDscToken The amount of DSC to burn
-* Ths function burns and redeem underlying collateral in one transaction
-/*
-
-    function redeemCollateralForDSC(address tokenCollateralAddress, uint256 amountCollateral, uint256 amountDscToBurn) external {
-         burnDsc(amountDscToBurn);
-         redeemCollateral(tokenCollateralAddress, amountCollateral);
-         //redeem collateral already checks health factor
-
-
+    function redeemCollateral(address tokenCollateralAddress, uint256 amountCollateral)
+        public
+        moreThanZero(amountCollateral)
+        nonReentrant
+    {
+        s_collateralDeposited[msg.sender][tokenCollateralAddress] -= amountCollateral;
+        emit collateralRedeemed(msg.sender, amountCollateral, tokenCollateralAddress);
+        bool success = IERC20(tokenCollateralAddress).transfer(msg.sender, amountCollateral);
+        if (!success) {
+           revert  DSCEngine__TransferFailed();
+        }
+        _revertIfHealthFactorIsBroken(msg.sender);
     }
 
     /*
-    * follows CEI
-    * @param the amount of DSC to mint
-    * @notice they must have the collateral value more than the minimum threshhold
-    *
-    */
+    *@param tokenCollateralAddress The collateral address to redeem
+    * @param amountColateral The amount of collateral to redeem
+    *@param amountDscToken The amount of DSC to burn
+    * Ths function burns and redeem underlying collateral in one transaction
+    /*
+
+        function redeemCollateralForDSC(address tokenCollateralAddress, uint256 amountCollateral, uint256 amountDscToBurn) external {
+             burnDsc(amountDscToBurn);
+             redeemCollateral(tokenCollateralAddress, amountCollateral);
+             //redeem collateral already checks health factor
+
+
+        }
+
+        /*
+        * follows CEI
+        * @param the amount of DSC to mint
+        * @notice they must have the collateral value more than the minimum threshhold
+        *
+        */
     function mintDSC(uint256 amountDscToMint) public moreThanZero(amountDscToMint) nonReentrant {
         s_DSCMinted[msg.sender] += amountDscToMint;
         _revertIfHealthFactorIsBroken(msg.sender);
@@ -142,41 +143,42 @@ contract DSCEngine is ReentrancyGuard {
         }
     }
 
-    function burnDSC(uint256 amount) public moreThanZero( mount) nonReentrant {
-
-        s_DSCMinted(msg.sender) -= amount;
+    function burnDSC(uint256 amount) public moreThanZero(amount) nonReentrant {
+        s_DSCMinted[msg.sender] -= amount;
         bool success = i_dsc.transferFrom(msg.sender, address(this), amount);
         if (!success) {
             revert DSCEngine__TransferFailed();
         }
         i_dsc.burn(amount);
-        _revertHealthFactorIsBroken(msg.sender); // Idont think this would hit 
+        _revertIfHealthFactorIsBroken(msg.sender); // Idont think this would hit
     }
 
+    /*
 
-/*
-
-* @notice you can partially liqudate a user
-*@you will get a user funds if you liquidates them
-*@ this function wrking assumes the project will be 200 percent undercolllaterised 
-@notice a kown bug wuld be if the protocola was lessthan 100% undercollaterised
-*/
-    function liquidate( address collateral, address user, uint256 debtToCover)  external moreThanZero(amount) nonreentrant() {
-        unt256 startingUserHealthFactor = healthFactor(user);
-        if(startingUserHealthFactor > MIN_HEALTH_FACTOR)
-        {
+    * @notice you can partially liqudate a user
+    *@you will get a user funds if you liquidates them
+    *@ this function wrking assumes the project will be 200 percent undercolllaterised
+    @notice a kown bug wuld be if the protocola was lessthan 100% undercollaterised
+    */
+    function liquidate(address collateral, address user, uint256 debtToCover)
+        external
+        moreThanZero(debtToCover)
+        nonReentrant
+    {
+        uint256 startingUserHealthFactor = _healthFactor(user);
+        if (startingUserHealthFactor > MIN_HEALTH_FACTOR) {
             revert DSCEngine__healthFactorOkay();
         }
-          
-    uint256 tokenAmountFromDebtCvered = getTokenAmountFromUsd(collateral, debtToCover);
+
+        uint256 tokenAmountFromDebtCvered = getTokenAmountFromUsd(collateral, debtToCover);
     }
 
-  function getTokenAmountFromUsd(address token, uint256 usdAmountInWei) public view returns{
-           Aggregator =V3Interface priceFeed = AggregatorV3Interface
-
-  }
-
-
+    function getTokenAmountFromUsd(address token, uint256 usdAmountInWei) public view returns (uint256) {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
+        (s_priceFeeds[token]);
+        (, int256 price,,,) = priceFeed.latestRoundData();
+        return ((usdAmountInWei * PRECISION) / uint256(price)) / ADDITIONAL_FEED_PRECISION;
+    }
 
     function getHealthFactor() external view returns (uint256) {
         return _healthFactor(msg.sender);
@@ -236,16 +238,16 @@ contract DSCEngine is ReentrancyGuard {
         return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
     }
 
-
-/*
-* @param tokenCollateralAddress The Address of the token to deposit as collateral 
-*@param amountcollteral The amount of collateral to deposit 
-*@ amountDscToMint The amount of decentralised stablecoin to mint 
-*@notice this function will deposit your collateral and mint Dsc in one transacton
-*/
-    function depositCollateralAndMintDsc( address tokenCollateralAddress, uint256 amountCollateral, amount DscToMint) external{
-      depositCollateral(tokenCollateralAddress, amountCollateral);
-      mintDsc(amountDscToMint);
-}
-
+    /*
+    * @param tokenCollateralAddress The Address of the token to deposit as collateral
+    *@param amountcollteral The amount of collateral to deposit
+    *@ amountDscToMint The amount of decentralised stablecoin to mint
+    *@notice this function will deposit your collateral and mint Dsc in one transacton
+    */
+    function depositCollateralAndMintDsc(address tokenCollateralAddress, uint256 amountCollateral, uint256 amountDscToMint)
+        external
+    {
+        depositCollateral(tokenCollateralAddress, amountCollateral);
+        mintDSC(amountDscToMint);
+    }
 }
